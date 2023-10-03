@@ -19,13 +19,18 @@ namespace :db do
 
     # Glob through the directories under seeds_path and create a task for each adding it to the dependency list.
     # Then create a task for the environment
-    glob_seed_files_matching('/*/').each do |directory|
-      environment = File.basename(directory)
+    seed_directories = Set.new
+    glob_seed_files_matching('**/**').map { |file| seed_directories << File.dirname(file) }.uniq
 
-      environment_dependencies = seed_tasks_matching(environment, Seedbank.matcher)
+    seed_directories.each do |directory|
+      environment = directory.gsub(/#{Seedbank.seeds_root}\/?/, '')
+      next if environment.blank?
 
-      desc "Load the seed data from db/seeds.rb, db/seeds/#{Seedbank.matcher} and db/seeds/#{environment}/#{Seedbank.matcher}."
-      task environment => ['db:seed:common'] + environment_dependencies
+      environment_dependencies = seed_tasks_matching(environment, '**', Seedbank.matcher)
+      if environment_dependencies.any?
+        desc "Load the seed data from db/seeds.rb, db/seeds/#{Seedbank.matcher} and db/seeds/#{environment}/#{Seedbank.matcher}."
+        task environment.tr('/', ':') => ['db:seed:common'] + environment_dependencies
+      end
 
       override_dependency << "db:seed:#{environment}" if defined?(Rails) && Rails.env == environment
     end
