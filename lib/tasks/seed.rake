@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 namespace :db do
   using Seedbank::DSL
-  override_dependency = ['db:seed:common']
+  override_dependency = []
 
   namespace :seed do
     # Create seed tasks for all the seeds in seeds_path and add them to the dependency
@@ -14,30 +14,28 @@ namespace :db do
       common_dependencies.unshift('db:seed:original')
     end
 
-    desc "Load the seed data from db/seeds.rb and db/seeds/#{Seedbank.matcher}."
-    task 'common' => common_dependencies
+    override_dependency += common_dependencies
 
     # Glob through the directories under seeds_path and create a task for each adding it to the dependency list.
     # Then create a task for the environment
-    seed_directories = Set.new
-    glob_seed_files_matching('**/**').map { |file| seed_directories << File.dirname(file) }.uniq
+    directories = Set.new
+    glob_seed_files_matching('**/**').map { |file| directories << File.dirname(file) }.uniq
 
-    seed_directories.each do |directory|
-      environment = directory.gsub(/#{Seedbank.seeds_root}\/?/, '')
-      next if environment.blank?
+    directories.each do |directory|
+      subdirectory = directory.gsub(/#{Seedbank.seeds_root}\/?/, '')
+      next if subdirectory.blank?
 
-      environment_dependencies = seed_tasks_matching(environment, '**', Seedbank.matcher)
-      if environment_dependencies.any?
-        desc "Load the seed data from db/seeds.rb, db/seeds/#{Seedbank.matcher} and db/seeds/#{environment}/#{Seedbank.matcher}."
-        task environment.tr('/', ':') => ['db:seed:common'] + environment_dependencies
+      subdirectory_dependencies = seed_tasks_matching(subdirectory, '**', Seedbank.matcher)
+      if subdirectory_dependencies.any?
+        desc "Load the seed data from db/seeds/#{subdirectory}/#{Seedbank.matcher}."
+        task subdirectory.tr('/', ':') => subdirectory_dependencies
+
+        override_dependency << "db:seed:#{subdirectory}"
       end
-
-      override_dependency << "db:seed:#{environment}" if defined?(Rails) && Rails.env == environment
     end
   end
 
   # Override db:seed to run all the common and environments seeds plus the original db:seed.
-  desc %(Load the seed data from db/seeds.rb, db/seeds/#{Seedbank.matcher} and db/seeds/ENVIRONMENT/#{Seedbank.matcher}.
-  ENVIRONMENT is the current Rails.env.)
+  desc %(Load the seed data from db/seeds.rb, db/seeds/#{Seedbank.matcher} and db/seeds/**/#{Seedbank.matcher}.)
   override_seed_task seed: override_dependency
 end
